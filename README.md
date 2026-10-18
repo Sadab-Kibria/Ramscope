@@ -1,36 +1,114 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# RAMScope — Physical RAM Visualization & Monitoring System
 
-## Getting Started
+RAMScope is an educational Linux physical-memory visualization and monitoring system that exposes the physical-memory layer normally abstracted away by virtual memory.
 
-First, run the development server:
+---
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## Architecture Overview
+
+```
+                        Linux Physical RAM
+                                │
+                                ▼
+                    Linux Kernel Subsystems
+         (/proc/meminfo, /proc/kpageflags, /proc/<pid>/pagemap)
+                                │
+                                ▼
+                     RAMScope Kernel Module
+                (C Character Device: /dev/ramscope)
+                                │
+                                ▼
+                      Python FastAPI Backend
+             (RAM Service, Page Service, Process Service)
+                                │
+                      REST API + WebSocket
+                                │
+                                ▼
+                 Next.js 16 + React 19 Frontend
+               (Clean Light 2D Canvas Memory Map)
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+---
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Key Features & Operating Modes
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 1. Normal Mode (Standard User Access)
+* **Real Global RAM Statistics**: Reads real system RAM metrics from `/proc/meminfo` and `os.sysconf("SC_PAGE_SIZE")` (`MemTotal`, `MemAvailable`, `MemFree`, `Buffers`, `Cached`, `Slab`).
+* **Real Physical Page Calculation**: `Total Pages = Total RAM / Page Size` (e.g. 4,164,734 pages for 16 GB RAM).
+* **Aggregated Memory Grid**: 2D Canvas rendering of physical address space with customizable bucket resolutions (128, 256, 512, 1024 blocks).
+* **Real Process Memory Monitoring**: Live tracking of PID, Name, RSS, PSS, VSZ, and memory percentage.
 
-## Learn More
+### 2. Privileged Mode (`sudo` / `CAP_SYS_ADMIN`)
+* **Hardware PFN Inspection**: Directly queries physical page frames via `/dev/ramscope` IOCTL or `/proc/kpageflags` and `/proc/kpagecount`.
+* **Kernel Page Flags**: Decodes Linux kernel page flags (`Anon`, `Active`, `Slab`, `Buddy`, `Reserved`, `Mmap`, `CompoundHead`, `Dirty`, etc.).
+* **Process Virtual-to-Physical Address Translation**: Parses `/proc/<pid>/pagemap` to map virtual pages to hardware PFNs.
+* **Process RAM Highlight**: Visually highlights all physical page frames allocated to a selected process on the RAM canvas.
 
-To learn more about Next.js, take a look at the following resources:
+---
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Setup & Running Instructions
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### 1. (Optional) Build and Load the Kernel Module on Linux
+```bash
+cd kernel
+make
+sudo insmod ramscope.ko
 
-## Deploy on Vercel
+# Verify
+dmesg | tail -n 10
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### 2. Run the FastAPI Backend
+```bash
+# Navigate to the backend directory
+cd backend
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+# (Optional) Create and activate a virtual environment
+python -m venv venv
+# Linux/macOS:
+source venv/bin/activate
+# Windows (PowerShell):
+# .\venv\Scripts\Activate.ps1
+
+pip install -r requirements.txt
+
+# Run with standard permissions:
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+# Or on Linux with elevated permissions for hardware PFN inspection:
+sudo $(which python) -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+The FastAPI Swagger interactive documentation is accessible at: [http://localhost:8000/docs](http://localhost:8000/docs).
+
+### 3. Run the Next.js Frontend
+```bash
+# In the project root directory
+npm install
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+#### Environment Variables
+By default, the frontend connects to `http://127.0.0.1:8000`. To customize the backend URL, create a `.env.local` file:
+```env
+NEXT_PUBLIC_API_URL=http://127.0.0.1:8000
+```
+
+---
+
+## API Endpoints Reference
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/` | Root health status and privilege summary. |
+| `GET` | `/docs` | OpenAPI / Swagger interactive API documentation. |
+| `GET` | `/api/status` | Reports Linux platform status, root privileges, and kernel module access. |
+| `GET` | `/api/ram` | Returns real system RAM stats (`totalBytes`, `usedBytes`, `availableBytes`, `pageSize`, `totalPages`, `maxPfn`). |
+| `GET` | `/api/pages?resolution=512` | Returns aggregated physical RAM page frames and bucket states. |
+| `GET` | `/api/page/{pfn}` | Inspects detailed flags and process mappings for a single PFN. |
+| `GET` | `/api/processes?limit=200` | Lists running processes with real RSS, PSS, VSZ, and memory percentage. |
+| `GET` | `/api/process/{pid}` | Retrieves memory statistics for a specific PID. |
+| `GET` | `/api/process/{pid}/pages` | Translates virtual address spaces into physical PFNs for the specified PID. |
+| `WS` | `/ws/live` | Real-time WebSocket streaming RAM updates every 1.5 seconds. |

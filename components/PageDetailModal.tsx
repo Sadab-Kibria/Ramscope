@@ -44,7 +44,11 @@ export const PageDetailModal: React.FC<PageDetailModalProps> = ({
                 <h3 className="text-base font-bold text-slate-900">
                   Physical Page Frame #{pfn}
                 </h3>
-                <span className="px-1.5 py-0.5 rounded text-xs font-mono font-bold uppercase bg-slate-100 border border-slate-200 text-slate-700">
+                <span className={`px-1.5 py-0.5 rounded text-xs font-mono font-bold uppercase border ${
+                  status === "allocated"
+                    ? "bg-emerald-100 border-emerald-300 text-emerald-800"
+                    : "bg-slate-100 border-slate-200 text-slate-700"
+                }`}>
                   {status}
                 </span>
               </div>
@@ -68,6 +72,23 @@ export const PageDetailModal: React.FC<PageDetailModalProps> = ({
           </div>
         ) : (
           <div className="space-y-3">
+            {/* Allocation Banner if Allocated */}
+            {(pageDetail?.isAllocated || pageDetail?.is_allocated || status === "allocated") && (
+              <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                  <span className="font-semibold text-emerald-900">
+                    RAMScope Project Allocated Memory
+                  </span>
+                </div>
+                {(pageDetail?.allocatedBy || pageDetail?.allocated_by) && (
+                  <span className="px-2 py-0.5 rounded font-mono font-bold bg-white text-emerald-800 border border-emerald-200">
+                    App: {pageDetail?.allocatedBy || pageDetail?.allocated_by}
+                  </span>
+                )}
+              </div>
+            )}
+
             {/* Quick Metrics */}
             <div className="grid grid-cols-3 gap-2 text-xs font-mono">
               <div className="p-2.5 rounded bg-slate-50 border border-slate-200">

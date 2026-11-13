@@ -20,6 +20,16 @@ class RamService:
         page_size = get_system_page_size()
         is_privileged = self.kmod.is_available() or self.kflags.is_available()
 
+        # Check active project reservations
+        allocated_bytes = 0
+        try:
+            from app.services.reservation_service import ReservationService
+            res_service = ReservationService()
+            reservations = res_service.list_reservations()
+            allocated_bytes = sum(int(r.size_bytes) for r in reservations)
+        except Exception:
+            pass
+
         # Try kernel module first if available
         if self.kmod.is_available():
             try:
@@ -29,6 +39,14 @@ class RamService:
                     avail = int(kinfo["available_ram_bytes"])
                     free = int(kinfo["free_ram_bytes"])
                     used = max(0, total - avail)
+
+                    # When the kernel driver allocates memory via alloc_pages_exact(),
+                    # the Linux kernel already subtracts the allocated pages from freeram & available.
+                    # Ensure used accounts for at least allocated_bytes:
+                    if used < allocated_bytes:
+                        used = allocated_bytes
+                        avail = max(0, total - used)
+
                     p_size = int(kinfo["page_size"]) or page_size
                     total_pages = int(kinfo["total_pages"]) or (total // p_size)
                     max_pfn = int(kinfo["max_pfn"]) or total_pages
@@ -53,6 +71,7 @@ class RamService:
                         total_pages=total_pages,
                         max_pfn=max_pfn,
                         usage_percentage=round(usage_pct, 2),
+                        allocated_bytes=allocated_bytes,
                         privileged=True,
                     )
             except Exception as e:
@@ -75,12 +94,18 @@ class RamService:
                 avail = free = int(total * 0.5)
 
         used = max(0, total - avail)
+
+        # Factor in RAMScope project allocations
+        used = min(total, used + allocated_bytes)
+        avail = max(0, avail - allocated_bytes)
+        free = max(0, free - allocated_bytes)
+
         total_pages = (total // page_size) if (total > 0 and page_size > 0) else 0
         max_pfn = get_max_physical_pfn(total_pages, page_size)
         usage_pct = (used / total * 100.0) if total > 0 else 0.0
         kernel_cache = slab + buffers + cached
 
-        logger.info(f"RAM statistics: Total={total} Bytes ({total_pages} pages), Used={used} Bytes, Avail={avail} Bytes, PageSize={page_size}")
+        logger.info(f"RAM statistics: Total={total} Bytes ({total_pages} pages), Used={used} Bytes (Allocated={allocated_bytes}), Avail={avail} Bytes, PageSize={page_size}")
 
         return RamInfoResponse(
             total_bytes=total,
@@ -95,5 +120,6 @@ class RamService:
             total_pages=total_pages,
             max_pfn=max_pfn,
             usage_percentage=round(usage_pct, 2),
+            allocated_bytes=allocated_bytes,
             privileged=is_privileged,
         )

@@ -8,17 +8,24 @@ from app.models.ram import (
     PageDetailResponse,
     ProcessInfo,
     ProcessPagesResponse,
+    ReserveRequest,
+    ReserveResponse,
+    ReleaseRequest,
+    ReleaseResponse,
+    ReservationItem,
 )
 from app.linux.privileges import check_privileges
 from app.services.ram_service import RamService
 from app.services.page_service import PageService
 from app.services.process_service import ProcessService
+from app.services.reservation_service import ReservationService
 
 router = APIRouter()
 
 ram_service = RamService()
 page_service = PageService()
 process_service = ProcessService()
+reservation_service = ReservationService()
 
 @router.get("/status", response_model=PrivilegeStatus, summary="Check Linux privilege and kernel module status")
 def get_status():
@@ -59,6 +66,40 @@ def get_process_pages(
     pid: int,
     max_pages: int = Query(10000, ge=10, le=100000, description="Max physical pages to return in detail")
 ):
-    if pid <= 0:
-        raise HTTPException(status_code=400, detail="PID must be positive integer")
+    if pid == 0:
+        raise HTTPException(status_code=400, detail="PID 0 is reserved. Please provide a valid process PID.")
     return process_service.get_process_pages(pid, max_pages=max_pages)
+
+# Step 6: Memory Reservation & Deallocation Endpoints
+@router.post("/reserve", response_model=ReserveResponse, summary="Allocate/reserve physical memory for an application")
+def reserve_memory(req: ReserveRequest):
+    if not req.application or not req.application.strip():
+        raise HTTPException(status_code=400, detail="Application name cannot be empty")
+    
+    # Check that requested size is within safe limits (1 KB to 512 MB)
+    size_b = req.size_bytes if (req.size_bytes is not None and req.size_bytes > 0) else (
+        int((req.size_mb or 16) * 1024 * 1024)
+    )
+    if size_b <= 0:
+        raise HTTPException(status_code=400, detail="Reservation size must be positive")
+    if size_b > (512 * 1024 * 1024):
+        raise HTTPException(status_code=400, detail="Maximum single allocation size is 512 MB for safety")
+
+    res = reservation_service.reserve(req)
+    if not res.success:
+        raise HTTPException(status_code=500, detail=res.message)
+    return res
+
+@router.post("/release", response_model=ReleaseResponse, summary="Deallocate a previously reserved memory region")
+def release_memory(req: ReleaseRequest):
+    if req.region_id <= 0:
+        raise HTTPException(status_code=400, detail="Region ID must be positive integer")
+    
+    res = reservation_service.release(req.region_id)
+    if not res.success:
+        raise HTTPException(status_code=404, detail=res.message)
+    return res
+
+@router.get("/reservations", response_model=List[ReservationItem], summary="List all currently active memory reservations")
+def list_reservations():
+    return reservation_service.list_reservations()

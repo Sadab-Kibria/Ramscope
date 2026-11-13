@@ -20,6 +20,7 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({ ram }) => {
   const usagePct = ram?.usagePercentage ?? ram?.usage_percentage ?? ((total > 0) ? (used / total * 100) : 0);
   const cached = ram?.cachedBytes ?? ram?.cached_bytes ?? 0;
   const slab = ram?.slabBytes ?? ram?.slab_bytes ?? 0;
+  const allocated = ram?.allocatedBytes ?? ram?.allocated_bytes ?? 0;
 
   const cards = [
     {
@@ -31,7 +32,9 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({ ram }) => {
     {
       label: "Used RAM",
       value: formatBytes(used),
-      sub: `${usagePct.toFixed(1)}% Allocated`,
+      sub: allocated > 0
+        ? `${usagePct.toFixed(1)}% (+${formatBytes(allocated)} reserved)`
+        : `${usagePct.toFixed(1)}% of Physical RAM`,
       icon: Activity,
     },
     {
@@ -94,10 +97,16 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({ ram }) => {
             <div className="flex items-center gap-3 text-[11px]">
               <span className="flex items-center gap-1.5">
                 <span className="h-2.5 w-2.5 rounded-sm bg-blue-600 inline-block" />
-                Used ({formatBytes(used)})
+                Used ({formatBytes(Math.max(0, used - allocated))})
               </span>
+              {allocated > 0 && (
+                <span className="flex items-center gap-1.5 font-semibold text-emerald-800">
+                  <span className="h-2.5 w-2.5 rounded-sm bg-emerald-500 inline-block ring-1 ring-emerald-600" />
+                  Project Reserved ({formatBytes(allocated)})
+                </span>
+              )}
               <span className="flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-sm bg-emerald-500 inline-block" />
+                <span className="h-2.5 w-2.5 rounded-sm bg-slate-300 inline-block" />
                 Available ({formatBytes(avail)})
               </span>
               {cached > 0 && (
@@ -117,14 +126,21 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({ ram }) => {
           {total > 0 && (
             <>
               <div
-                style={{ width: `${(used / total) * 100}%` }}
+                style={{ width: `${(Math.max(0, used - allocated) / total) * 100}%` }}
                 className="h-full bg-blue-600 transition-all duration-300"
-                title="Used RAM"
+                title={`Used RAM: ${formatBytes(Math.max(0, used - allocated))}`}
               />
+              {allocated > 0 && (
+                <div
+                  style={{ width: `${(allocated / total) * 100}%` }}
+                  className="h-full bg-emerald-500 transition-all duration-300 ring-1 ring-emerald-600"
+                  title={`Project Reserved: ${formatBytes(allocated)}`}
+                />
+              )}
               <div
                 style={{ width: `${(avail / total) * 100}%` }}
-                className="h-full bg-emerald-500 transition-all duration-300"
-                title="Available RAM"
+                className="h-full bg-slate-200 transition-all duration-300"
+                title={`Available RAM: ${formatBytes(avail)}`}
               />
             </>
           )}

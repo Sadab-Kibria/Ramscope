@@ -5,6 +5,11 @@ import {
   PageDetail,
   ProcessInfo,
   ProcessPagesResponse,
+  ReserveRequest,
+  ReserveResponse,
+  ReleaseRequest,
+  ReleaseResponse,
+  ReservationInfo,
 } from "@/types/ram";
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
@@ -177,6 +182,30 @@ export async function fetchProcessPages(
   maxPages: number = 10000
 ): Promise<ProcessPagesResponse> {
   return apiFetch<ProcessPagesResponse>(`/api/process/${pid}/pages?max_pages=${maxPages}`);
+}
+
+export async function reserveMemory(req: ReserveRequest): Promise<ReserveResponse> {
+  return apiFetch<ReserveResponse>("/api/reserve", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(req),
+  });
+}
+
+export async function releaseMemory(regionId: number): Promise<ReleaseResponse> {
+  return apiFetch<ReleaseResponse>("/api/release", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ regionId }),
+  });
+}
+
+export async function fetchReservations(): Promise<ReservationInfo[]> {
+  return apiFetch<ReservationInfo[]>("/api/reservations");
 }
 
 export function formatBytes(bytes: number, decimals: number = 2): string {

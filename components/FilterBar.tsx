@@ -21,6 +21,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
     { id: "used", label: "Used" },
     { id: "free", label: "Free" },
     { id: "kernel", label: "Kernel / Cache" },
+    { id: "allocated", label: "Allocated" },
     { id: "unknown", label: "Unknown / Other" },
   ];
 

@@ -43,6 +43,8 @@ export interface RamInfo {
   max_pfn?: number;
   usagePercentage: number;
   usage_percentage?: number;
+  allocatedBytes?: number;
+  allocated_bytes?: number;
   privileged?: boolean;
 }
 
@@ -53,7 +55,7 @@ export interface PageBlockSummary {
   end_pfn?: number;
   pageCount: number;
   page_count?: number;
-  status: "free" | "used" | "kernel" | "reserved" | "mixed" | "unknown";
+  status: "free" | "used" | "kernel" | "reserved" | "allocated" | "mixed" | "unknown";
   freeCount: number;
   free_count?: number;
   usedCount: number;
@@ -62,6 +64,8 @@ export interface PageBlockSummary {
   kernel_count?: number;
   reservedCount: number;
   reserved_count?: number;
+  allocatedCount?: number;
+  allocated_count?: number;
   unknownCount?: number;
   unknown_count?: number;
   startAddressHex: string;
@@ -118,6 +122,10 @@ export interface PageDetail {
   is_slab?: boolean;
   isReserved: boolean;
   is_reserved?: boolean;
+  isAllocated?: boolean;
+  is_allocated?: boolean;
+  allocatedBy?: string | null;
+  allocated_by?: string | null;
   mappedProcesses: ProcessMappingSummary[];
   mapped_processes?: ProcessMappingSummary[];
   note?: string | null;
@@ -165,4 +173,67 @@ export interface ProcessPagesResponse {
   pfn_list?: number[];
   pages: ProcessPageEntry[];
   error?: string | null;
+}
+
+export interface ReserveRequest {
+  application: string;
+  sizeBytes?: number;
+  size_bytes?: number;
+  sizeMb?: number;
+  size_mb?: number;
+}
+
+export interface ReserveResponse {
+  success: boolean;
+  regionId: number;
+  region_id?: number;
+  application: string;
+  startPfn: number;
+  start_pfn?: number;
+  endPfn: number;
+  end_pfn?: number;
+  pageCount: number;
+  page_count?: number;
+  sizeBytes: number;
+  size_bytes?: number;
+  sizeMb: number;
+  size_mb?: number;
+  physicalAddressHex: string;
+  physical_address_hex?: string;
+  timestamp: string;
+  message: string;
+}
+
+export interface ReleaseRequest {
+  regionId: number;
+  region_id?: number;
+}
+
+export interface ReleaseResponse {
+  success: boolean;
+  regionId: number;
+  region_id?: number;
+  freedBytes: number;
+  freed_bytes?: number;
+  message: string;
+}
+
+export interface ReservationInfo {
+  regionId: number;
+  region_id?: number;
+  application: string;
+  startPfn: number;
+  start_pfn?: number;
+  endPfn: number;
+  end_pfn?: number;
+  pageCount: number;
+  page_count?: number;
+  sizeBytes: number;
+  size_bytes?: number;
+  sizeMb: number;
+  size_mb?: number;
+  physicalAddressHex: string;
+  physical_address_hex?: string;
+  createdAt: string;
+  created_at?: string;
 }

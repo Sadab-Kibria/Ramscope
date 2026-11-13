@@ -29,6 +29,7 @@ class RamInfoResponse(BaseModel):
     total_pages: int = Field(..., alias="totalPages", description="Total number of physical page frames")
     max_pfn: int = Field(..., alias="maxPfn", description="Maximum Page Frame Number (PFN)")
     usage_percentage: float = Field(..., alias="usagePercentage", description="Memory usage percentage (0-100)")
+    allocated_bytes: int = Field(0, alias="allocatedBytes", description="Project-reserved physical RAM in bytes")
     privileged: bool = Field(False, description="Whether privileged physical memory scanning is available")
 
 class PageBlockSummary(BaseModel):
@@ -37,11 +38,12 @@ class PageBlockSummary(BaseModel):
     start_pfn: int = Field(..., alias="startPFN")
     end_pfn: int = Field(..., alias="endPFN")
     page_count: int = Field(..., alias="pageCount")
-    status: str = Field(..., description="'free', 'used', 'kernel', 'reserved', 'mixed', 'unknown'")
+    status: str = Field(..., description="'free', 'used', 'kernel', 'reserved', 'allocated', 'mixed', 'unknown'")
     free_count: int = Field(0, alias="freeCount")
     used_count: int = Field(0, alias="usedCount")
     kernel_count: int = Field(0, alias="kernelCount")
     reserved_count: int = Field(0, alias="reservedCount")
+    allocated_count: int = Field(0, alias="allocatedCount")
     unknown_count: int = Field(0, alias="unknownCount")
     start_address_hex: str = Field(..., alias="startAddressHex")
     end_address_hex: str = Field(..., alias="endAddressHex")
@@ -79,6 +81,8 @@ class PageDetailResponse(BaseModel):
     is_anon: bool = Field(False, alias="isAnon")
     is_slab: bool = Field(False, alias="isSlab")
     is_reserved: bool = Field(False, alias="isReserved")
+    is_allocated: bool = Field(False, alias="isAllocated")
+    allocated_by: Optional[str] = Field(None, alias="allocatedBy")
     mapped_processes: List[ProcessMappingSummary] = Field([], alias="mappedProcesses")
     note: Optional[str] = None
 
@@ -117,3 +121,52 @@ class ProcessPagesResponse(BaseModel):
     pfn_list: List[int] = Field([], alias="pfnList")
     pages: List[ProcessPageEntry] = []
     error: Optional[str] = None
+
+# Step 6: Memory Reservation & Allocation Models
+class ReserveRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    application: str = Field(..., description="Application name or process label")
+    size_bytes: Optional[int] = Field(None, alias="sizeBytes", description="Size to reserve in bytes")
+    size_mb: Optional[float] = Field(None, alias="sizeMb", description="Size to reserve in Megabytes")
+
+class ReserveResponse(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    success: bool = True
+    region_id: int = Field(..., alias="regionId")
+    application: str
+    start_pfn: int = Field(..., alias="startPfn")
+    end_pfn: int = Field(..., alias="endPfn")
+    page_count: int = Field(..., alias="pageCount")
+    size_bytes: int = Field(..., alias="sizeBytes")
+    size_mb: float = Field(..., alias="sizeMb")
+    physical_address_hex: str = Field(..., alias="physicalAddressHex")
+    timestamp: str
+    message: str
+
+class ReleaseRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    region_id: int = Field(..., alias="regionId")
+
+class ReleaseResponse(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    success: bool = True
+    region_id: int = Field(..., alias="regionId")
+    freed_bytes: int = Field(0, alias="freedBytes")
+    message: str
+
+class ReservationItem(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    region_id: int = Field(..., alias="regionId")
+    application: str
+    start_pfn: int = Field(..., alias="startPfn")
+    end_pfn: int = Field(..., alias="endPfn")
+    page_count: int = Field(..., alias="pageCount")
+    size_bytes: int = Field(..., alias="sizeBytes")
+    size_mb: float = Field(..., alias="sizeMb")
+    physical_address_hex: str = Field(..., alias="physicalAddressHex")
+    created_at: str = Field(..., alias="createdAt")

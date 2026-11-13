@@ -4,11 +4,16 @@
 #include <unistd.h>
 #include <sys/ioctl.h>
 #include <stdint.h>
+#include <string.h>
 #include "ramscope.h"
 
 int main(int argc, char **argv)
 {
-    int fd = open("/dev/ramscope", O_RDONLY);
+    int fd = open("/dev/ramscope", O_RDWR);
+    if (fd < 0) {
+        /* Fall back to O_RDONLY if write not allowed */
+        fd = open("/dev/ramscope", O_RDONLY);
+    }
     if (fd < 0) {
         perror("Failed to open /dev/ramscope");
         return 1;
@@ -49,13 +54,14 @@ int main(int argc, char **argv)
         for (int i = 0; i < 10; i++) {
             const char *status_str = "UNKNOWN";
             switch (results[i].status) {
-                case RAMSCOPE_PAGE_STATUS_FREE:     status_str = "FREE"; break;
-                case RAMSCOPE_PAGE_STATUS_USED:     status_str = "USED"; break;
-                case RAMSCOPE_PAGE_STATUS_KERNEL:   status_str = "KERNEL"; break;
-                case RAMSCOPE_PAGE_STATUS_RESERVED: status_str = "RESERVED"; break;
-                case RAMSCOPE_PAGE_STATUS_INVALID:  status_str = "INVALID"; break;
+                case RAMSCOPE_PAGE_STATUS_FREE:      status_str = "FREE"; break;
+                case RAMSCOPE_PAGE_STATUS_USED:      status_str = "USED"; break;
+                case RAMSCOPE_PAGE_STATUS_KERNEL:    status_str = "KERNEL"; break;
+                case RAMSCOPE_PAGE_STATUS_RESERVED:  status_str = "RESERVED"; break;
+                case RAMSCOPE_PAGE_STATUS_ALLOCATED: status_str = "ALLOCATED"; break;
+                case RAMSCOPE_PAGE_STATUS_INVALID:   status_str = "INVALID"; break;
             }
-            printf("  PFN %llu: Status=%-8s MapCount=%u RefCount=%u Flags=0x%llx\n",
+            printf("  PFN %llu: Status=%-9s MapCount=%u RefCount=%u Flags=0x%llx\n",
                    (unsigned long long)results[i].pfn,
                    status_str,
                    results[i].mapcount,
@@ -64,6 +70,67 @@ int main(int argc, char **argv)
         }
     } else {
         perror("ioctl RAMSCOPE_IOC_QUERY_PFNS failed");
+    }
+
+    /* Test Reservation System */
+    printf("\n=== Testing Memory Allocation (Step 6) ===\n");
+    struct ramscope_reservation_req res_req;
+    memset(&res_req, 0, sizeof(res_req));
+    res_req.size_bytes = 4 * 1024 * 1024; /* 4 MB */
+    strncpy(res_req.label, "RUET_TestApp", sizeof(res_req.label));
+
+    if (ioctl(fd, RAMSCOPE_IOC_RESERVE, &res_req) == 0) {
+        printf("✅ Successfully Reserved %llu bytes (%llu pages) for '%s'!\n",
+               (unsigned long long)res_req.size_bytes,
+               (unsigned long long)res_req.page_count,
+               res_req.label);
+        printf("   Region ID: %u, Starting PFN: %llu\n",
+               res_req.region_id,
+               (unsigned long long)res_req.start_pfn);
+
+        /* Inspect the newly allocated PFN to verify status is ALLOCATED */
+        struct ramscope_pfn_info alloc_info[1];
+        struct ramscope_pfn_query chk_query = {
+            .start_pfn = res_req.start_pfn,
+            .count = 1,
+            .results = alloc_info,
+        };
+        if (ioctl(fd, RAMSCOPE_IOC_QUERY_PFNS, &chk_query) == 0) {
+            printf("   Inspected PFN %llu status: %s (status code %u)\n",
+                   (unsigned long long)alloc_info[0].pfn,
+                   alloc_info[0].status == RAMSCOPE_PAGE_STATUS_ALLOCATED ? "ALLOCATED (Correct)" : "OTHER",
+                   alloc_info[0].status);
+        }
+
+        /* List Active Reservations */
+        struct ramscope_reservation_list r_list;
+        if (ioctl(fd, RAMSCOPE_IOC_LIST_RESERVATIONS, &r_list) == 0) {
+            printf("\nActive Reservations in Kernel (%u):\n", r_list.count);
+            for (uint32_t j = 0; j < r_list.count; j++) {
+                printf("  [%u] Region %u: App='%s', Start PFN=%llu, Pages=%llu, Size=%llu bytes\n",
+                       j + 1,
+                       r_list.entries[j].region_id,
+                       r_list.entries[j].label,
+                       (unsigned long long)r_list.entries[j].start_pfn,
+                       (unsigned long long)r_list.entries[j].page_count,
+                       (unsigned long long)r_list.entries[j].size_bytes);
+            }
+        }
+
+        /* Test Release */
+        printf("\n=== Testing Memory Deallocation ===\n");
+        struct ramscope_release_req rel_req = {
+            .region_id = res_req.region_id,
+        };
+        if (ioctl(fd, RAMSCOPE_IOC_RELEASE, &rel_req) == 0) {
+            printf("✅ Successfully Released Region %u! (%llu bytes freed)\n",
+                   res_req.region_id,
+                   (unsigned long long)rel_req.freed_bytes);
+        } else {
+            perror("ioctl RAMSCOPE_IOC_RELEASE failed");
+        }
+    } else {
+        perror("ioctl RAMSCOPE_IOC_RESERVE failed (Run as root or check driver permissions)");
     }
 
     close(fd);

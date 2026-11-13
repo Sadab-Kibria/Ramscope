@@ -15,6 +15,7 @@ from app.linux.proc_meminfo import (
 )
 from app.linux.kernel_module import KernelModuleClient
 from app.linux.pagemap import PagemapReader
+from app.services.reservation_service import ReservationService
 
 logger = logging.getLogger("ramscope.page_service")
 
@@ -23,6 +24,7 @@ class PageService:
         self.kflags = KpageflagsReader()
         self.kmod = KernelModuleClient()
         self.pagemap_reader = PagemapReader(self.kflags)
+        self.reservation_service = ReservationService()
 
     def get_pages_map(
         self,
@@ -53,10 +55,12 @@ class PageService:
 
         is_privileged = self.kmod.is_available() or self.kflags.is_available()
         use_kmod = self.kmod.is_available()
+        active_res = self.reservation_service.list_reservations()
 
         logger.info(
             f"Generating physical page map: range=[{start}, {end}], totalSpan={total_span}, "
-            f"resolution={resolution}, blockSize={block_size}, privileged={is_privileged}"
+            f"resolution={resolution}, blockSize={block_size}, privileged={is_privileged}, "
+            f"activeReservations={len(active_res)}"
         )
 
         if is_privileged:
@@ -76,8 +80,11 @@ class PageService:
                         u_c = sum(1 for x in items if x["status"] == "used")
                         k_c = sum(1 for x in items if x["status"] == "kernel")
                         r_c = sum(1 for x in items if x["status"] in ("reserved", "invalid"))
+                        a_c = sum(1 for x in items if x["status"] == "allocated")
 
-                        if f_c > b_count * 0.8:
+                        if a_c > b_count * 0.5:
+                            st = "allocated"
+                        elif f_c > b_count * 0.8:
                             st = "free"
                         elif u_c > b_count * 0.8:
                             st = "used"
@@ -94,24 +101,44 @@ class PageService:
                             "usedCount": u_c,
                             "kernelCount": k_c,
                             "reservedCount": r_c,
+                            "allocatedCount": a_c,
                             "unknownCount": 0,
                         }
                     else:
                         sample_rate = max(1, b_count // 32)
                         summary = self.kflags.read_pfn_range_summary(b_start, b_count, sample_rate=sample_rate)
+                        summary["allocatedCount"] = 0
                 else:
                     sample_rate = max(1, b_count // 32)
                     summary = self.kflags.read_pfn_range_summary(b_start, b_count, sample_rate=sample_rate)
+                    summary["allocatedCount"] = 0
+
+                # Check active project reservations
+                alloc_count = summary.get("allocatedCount", 0)
+                if not alloc_count:
+                    for r in active_res:
+                        ov_s = max(b_start, r.start_pfn)
+                        ov_e = min(b_end, r.end_pfn)
+                        if ov_e > ov_s:
+                            alloc_count += (ov_e - ov_s)
+
+                st = summary["status"]
+                if alloc_count > 0:
+                    if alloc_count >= b_count * 0.5:
+                        st = "allocated"
+                    elif st != "allocated":
+                        st = "mixed"
 
                 blocks.append(PageBlockSummary(
                     start_pfn=b_start,
                     end_pfn=b_end,
                     page_count=b_count,
-                    status=summary["status"],
+                    status=st,
                     free_count=summary["freeCount"],
                     used_count=summary["usedCount"],
                     kernel_count=summary["kernelCount"],
                     reserved_count=summary["reservedCount"],
+                    allocated_count=alloc_count,
                     unknown_count=summary.get("unknownCount", 0),
                     start_address_hex=f"0x{b_start * page_size:012x}",
                     end_address_hex=f"0x{b_end * page_size:012x}",
@@ -134,8 +161,19 @@ class PageService:
                 if b_count <= 0:
                     continue
 
+                # Check project reservations
+                alloc_count = 0
+                for r in active_res:
+                    ov_s = max(b_start, r.start_pfn)
+                    ov_e = min(b_end, r.end_pfn)
+                    if ov_e > ov_s:
+                        alloc_count += (ov_e - ov_s)
+
                 fraction = b / num_blocks
-                if fraction < kernel_ratio:
+                if alloc_count >= b_count * 0.5:
+                    st = "allocated"
+                    k_c, u_c, f_c = 0, 0, 0
+                elif fraction < kernel_ratio:
                     st = "kernel"
                     k_c, u_c, f_c = b_count, 0, 0
                 elif fraction < (kernel_ratio + used_ratio):
@@ -144,6 +182,9 @@ class PageService:
                 else:
                     st = "free"
                     k_c, u_c, f_c = 0, 0, b_count
+
+                if alloc_count > 0 and st != "allocated":
+                    st = "mixed"
 
                 blocks.append(PageBlockSummary(
                     start_pfn=b_start,
@@ -154,6 +195,7 @@ class PageService:
                     used_count=u_c,
                     kernel_count=k_c,
                     reserved_count=0,
+                    allocated_count=alloc_count,
                     unknown_count=0,
                     start_address_hex=f"0x{b_start * page_size:012x}",
                     end_address_hex=f"0x{b_end * page_size:012x}",
@@ -232,6 +274,28 @@ class PageService:
     def get_page_detail(self, pfn: int) -> PageDetailResponse:
         page_size = get_system_page_size()
         logger.info(f"Inspecting single physical page frame PFN={pfn}")
+
+        # Check if PFN is allocated by RAMScope project reservation
+        res_item = self.reservation_service.get_reservation_for_pfn(pfn)
+        if res_item:
+            return PageDetailResponse(
+                pfn=pfn,
+                physical_address_hex=f"0x{pfn * page_size:012x}",
+                status="allocated",
+                page_size=page_size,
+                map_count=1,
+                ref_count=1,
+                flags=["ALLOCATED", "PROJECT_RESERVED"],
+                raw_flags_hex="0x0",
+                is_kernel=False,
+                is_anon=False,
+                is_slab=False,
+                is_reserved=False,
+                is_allocated=True,
+                allocated_by=res_item.application,
+                mapped_processes=[ProcessMappingSummary(pid=0, name=f"Reserved: {res_item.application}")],
+                note=f"Project Reserved by RAMScope for application '{res_item.application}' (Region {res_item.region_id}, {res_item.size_mb} MB total)",
+            )
 
         if self.kmod.is_available():
             q_res = self.kmod.query_pfns(pfn, 1)

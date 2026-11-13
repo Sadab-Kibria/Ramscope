@@ -9,6 +9,7 @@ import { RamCanvas } from "@/components/RamCanvas";
 import { ProcessTable } from "@/components/ProcessTable";
 import { ProcessDetailModal } from "@/components/ProcessDetailModal";
 import { PageDetailModal } from "@/components/PageDetailModal";
+import { ReservationPanel } from "@/components/ReservationPanel";
 import {
   PrivilegeStatus,
   RamInfo,
@@ -17,6 +18,7 @@ import {
   PageDetail,
   ProcessInfo,
   ProcessPagesResponse,
+  ReservationInfo,
 } from "@/types/ram";
 import {
   fetchStatus,
@@ -25,6 +27,7 @@ import {
   fetchPageDetail,
   fetchProcesses,
   fetchProcessPages,
+  fetchReservations,
   API_BASE,
   ApiDiagnosticError,
 } from "@/lib/api";
@@ -37,6 +40,7 @@ export default function Dashboard() {
   const [ramInfo, setRamInfo] = useState<RamInfo | null>(null);
   const [pagesMap, setPagesMap] = useState<PagesMapResponse | null>(null);
   const [processes, setProcesses] = useState<ProcessInfo[]>([]);
+  const [reservations, setReservations] = useState<ReservationInfo[]>([]);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [isLive, setIsLive] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -88,7 +92,7 @@ export default function Dashboard() {
     try {
       let fetchErr: ApiDiagnosticError | null = null;
 
-      const [stat, ram, procs] = await Promise.all([
+      const [stat, ram, procs, resList] = await Promise.all([
         fetchStatus().catch((e) => {
           if (e instanceof ApiDiagnosticError) fetchErr = e;
           return null;
@@ -101,6 +105,7 @@ export default function Dashboard() {
           if (e instanceof ApiDiagnosticError) fetchErr = e;
           return [];
         }),
+        fetchReservations().catch(() => []),
       ]);
 
       if (stat) setStatus(stat);
@@ -108,6 +113,7 @@ export default function Dashboard() {
         setRamInfo(ram);
       }
       if (procs && procs.length > 0) setProcesses(procs);
+      if (resList) setReservations(resList);
 
       if (fetchErr) {
         setApiError(fetchErr);
@@ -121,6 +127,29 @@ export default function Dashboard() {
       setIsLoading(false);
     }
   }, [loadPagesMap, zoomRange, resolution]);
+
+  const handleReservationChanged = useCallback(async () => {
+    try {
+      const [resList, ram, procs] = await Promise.all([
+        fetchReservations().catch(() => []),
+        fetchRamInfo().catch(() => null),
+        fetchProcesses(200).catch(() => []),
+      ]);
+      if (resList) setReservations(resList);
+      if (ram) setRamInfo(ram);
+      if (procs && procs.length > 0) setProcesses(procs);
+      await loadPagesMap(zoomRange.startPfn, zoomRange.count, resolution);
+    } catch (err) {
+      console.error("Failed to update reservations", err);
+    }
+  }, [loadPagesMap, zoomRange, resolution]);
+
+  const handleLocateRange = useCallback((startPfn: number, pageCount: number) => {
+    const span = Math.max(pageCount * 2, 512);
+    const safeStart = Math.max(0, startPfn - Math.floor(pageCount / 4));
+    setZoomRange({ startPfn: safeStart, count: span });
+    loadPagesMap(safeStart, span, resolution);
+  }, [loadPagesMap, resolution]);
 
   // Initial fetch and periodic polling (every 2.5s)
   useEffect(() => {
@@ -372,6 +401,15 @@ export default function Dashboard() {
             onResolutionChange={handleResolutionChange}
             selectedResolution={resolution}
             isLoading={isLoading}
+          />
+
+          {/* Memory Allocation & Reservation Panel (Step 6) */}
+          <ReservationPanel
+            reservations={reservations}
+            processes={processes}
+            onReservationChanged={handleReservationChanged}
+            onLocateRange={handleLocateRange}
+            availableRamBytes={ramInfo?.availableBytes ?? ramInfo?.available_bytes ?? 0}
           />
         </section>
 

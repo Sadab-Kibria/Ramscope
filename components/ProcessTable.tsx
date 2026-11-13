@@ -76,14 +76,20 @@ export const ProcessTable: React.FC<ProcessTableProps> = ({
     <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-xs flex flex-col gap-3">
       {/* Header & Search */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center flex-wrap gap-2">
           <Cpu className="h-4 w-4 text-slate-700" />
           <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wide">
             Process Memory Statistics
           </h2>
           <span className="text-[11px] px-1.5 py-0.5 rounded bg-slate-100 border border-slate-200 text-slate-600 font-mono">
-            {filteredAndSorted.length} Active Processes
+            {processes.filter((p) => p.pid > 0).length} Active OS Processes
           </span>
+          {processes.some((p) => p.pid < 0) && (
+            <span className="text-[11px] px-2 py-0.5 rounded bg-emerald-100 border border-emerald-300 text-emerald-800 font-mono font-bold flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 inline-block animate-pulse"></span>
+              {processes.filter((p) => p.pid < 0).length} Allocated
+            </span>
+          )}
         </div>
 
         {/* Search */}
@@ -118,7 +124,7 @@ export const ProcessTable: React.FC<ProcessTableProps> = ({
                 className="py-2 px-3 cursor-pointer hover:text-slate-900 transition text-right"
               >
                 <div className="flex items-center justify-end gap-1">
-                  <span>PID</span>
+                  <span>PID / Tag</span>
                   <ArrowUpDown className="h-3 w-3" />
                 </div>
               </th>
@@ -166,6 +172,7 @@ export const ProcessTable: React.FC<ProcessTableProps> = ({
             {filteredAndSorted.map((p) => {
               const isSelected = selectedPid === p.pid;
               const isHighlighted = highlightedPid === p.pid;
+              const isAllocated = p.pid < 0;
               const residentCount = p.residentPages ?? p.resident_pages ?? 0;
 
               return (
@@ -173,22 +180,36 @@ export const ProcessTable: React.FC<ProcessTableProps> = ({
                   key={p.pid}
                   onClick={() => onSelectProcess(p)}
                   className={`group cursor-pointer transition hover:bg-slate-50 ${
-                    isSelected ? "bg-blue-50/70 font-medium" : ""
+                    isSelected ? "bg-blue-50/70 font-medium" : isAllocated ? "bg-emerald-50/30" : ""
                   }`}
                 >
                   <td className="py-2 px-3">
                     <div className="flex items-center gap-2">
                       <div
                         className={`h-2 w-2 rounded-full ${
-                          isHighlighted ? "bg-rose-500" : "bg-slate-300 group-hover:bg-blue-600"
+                          isHighlighted
+                            ? "bg-rose-500"
+                            : isAllocated
+                            ? "bg-emerald-500 ring-2 ring-emerald-200"
+                            : "bg-slate-300 group-hover:bg-blue-600"
                         }`}
                       />
-                      <span className="font-semibold text-slate-900 group-hover:text-blue-600">
+                      <span className={`font-semibold ${
+                        isAllocated ? "text-emerald-950 font-bold" : "text-slate-900 group-hover:text-blue-600"
+                      }`}>
                         {p.name}
                       </span>
                     </div>
                   </td>
-                  <td className="py-2 px-3 font-mono text-slate-600 text-right">{p.pid}</td>
+                  <td className="py-2 px-3 font-mono text-right">
+                    {isAllocated ? (
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                        Region #{Math.abs(p.pid)}
+                      </span>
+                    ) : (
+                      <span className="text-slate-600">{p.pid}</span>
+                    )}
+                  </td>
                   <td className="py-2 px-3 font-mono text-slate-900 text-right font-semibold">
                     {formatBytes(p.rss)}
                   </td>

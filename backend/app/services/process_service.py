@@ -84,8 +84,60 @@ class ProcessService:
             except Exception:
                 continue
 
+        # Append active RAMScope project reservations as tracked allocated processes
+        try:
+            from app.services.reservation_service import ReservationService
+            res_service = ReservationService()
+            reservations = res_service.list_reservations()
+            for r in reservations:
+                v_pid = -int(r.region_id)
+                r_bytes = int(r.size_bytes)
+                mem_pct = round((r_bytes / total_ram * 100.0), 2) if total_ram > 0 else 0.0
+                results.append(ProcessInfo(
+                    pid=v_pid,
+                    name=f"{r.application} [Allocated #{r.region_id}]",
+                    cmdline=f"RAMScope Allocation: Region {r.region_id} | {r.application} | PFN {r.start_pfn}..{r.end_pfn}",
+                    rss=r_bytes,
+                    pss=r_bytes,
+                    vsz=r_bytes,
+                    memory_percent=mem_pct,
+                    resident_pages=int(r.page_count),
+                    user="ramscope",
+                ))
+        except Exception:
+            pass
+
         results.sort(key=lambda p: (p.pss if p.pss is not None else p.rss), reverse=True)
         return results[:limit]
 
     def get_process_pages(self, pid: int, max_pages: int = 50000) -> ProcessPagesResponse:
+        if pid < 0:
+            region_id = abs(pid)
+            from app.services.reservation_service import ReservationService
+            res_service = ReservationService()
+            reservations = res_service.list_reservations()
+            match = next((r for r in reservations if r.region_id == region_id), None)
+            if match:
+                from app.models.ram import ProcessPageEntry
+                pfns = list(range(match.start_pfn, min(match.end_pfn, match.start_pfn + max_pages)))
+                page_entries = []
+                for p in pfns[:min(len(pfns), 1000)]:
+                    page_entries.append(ProcessPageEntry(
+                        pfn=p,
+                        virtual_address_hex=f"0x{(p - match.start_pfn) * 4096:012x}",
+                        physical_address_hex=f"0x{p * 4096:012x}",
+                        flags=["ALLOCATED", "PROJECT_RESERVED"],
+                        map_count=1,
+                        is_shared=False,
+                        is_swapped=False,
+                        is_present=True,
+                    ))
+                return ProcessPagesResponse(
+                    pid=pid,
+                    name=f"{match.application} [Allocated #{match.region_id}]",
+                    total_mapped_pages=match.page_count,
+                    resident_pages=match.page_count,
+                    pfn_list=pfns,
+                    pages=page_entries,
+                )
         return self.pagemap_reader.get_process_pages(pid, max_pages=max_pages)

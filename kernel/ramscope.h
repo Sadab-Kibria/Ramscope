@@ -15,6 +15,10 @@
 #define RAMSCOPE_PAGE_STATUS_USED       2
 #define RAMSCOPE_PAGE_STATUS_KERNEL     3
 #define RAMSCOPE_PAGE_STATUS_RESERVED   4
+#define RAMSCOPE_PAGE_STATUS_ALLOCATED  5   /* Project application-reserved RAM */
+
+#define RAMSCOPE_MAX_RESERVATIONS       32
+#define RAMSCOPE_LABEL_LEN              32
 
 /* Structure for global RAM information */
 struct ramscope_ram_info {
@@ -50,8 +54,44 @@ struct ramscope_pfn_query {
     struct ramscope_pfn_info __user *results;
 };
 
+/* Structure for requesting a memory reservation */
+struct ramscope_reservation_req {
+    __u64 size_bytes;                   /* [in] requested size in bytes */
+    char  label[RAMSCOPE_LABEL_LEN];    /* [in] application name / label */
+    __u32 region_id;                    /* [out] unique allocation region ID */
+    __u64 start_pfn;                    /* [out] starting PFN */
+    __u64 page_count;                   /* [out] number of 4KB pages allocated */
+    __u32 status;                       /* [out] 0 = success, errno otherwise */
+};
+
+/* Structure for releasing an existing memory reservation */
+struct ramscope_release_req {
+    __u32 region_id;                    /* [in] allocation region ID to free */
+    __u64 freed_bytes;                  /* [out] bytes deallocated */
+    __u32 status;                       /* [out] 0 = success, errno otherwise */
+};
+
+/* Structure representing an active reservation in the list */
+struct ramscope_reservation_entry {
+    __u32 region_id;
+    __u64 start_pfn;
+    __u64 page_count;
+    __u64 size_bytes;
+    char  label[RAMSCOPE_LABEL_LEN];
+    __u64 timestamp_sec;
+};
+
+/* Structure for querying all active reservations */
+struct ramscope_reservation_list {
+    __u32 count;
+    struct ramscope_reservation_entry entries[RAMSCOPE_MAX_RESERVATIONS];
+};
+
 /* IOCTL Commands */
-#define RAMSCOPE_IOC_GET_RAM_INFO   _IOR(RAMSCOPE_IOC_MAGIC, 1, struct ramscope_ram_info)
-#define RAMSCOPE_IOC_QUERY_PFNS     _IOWR(RAMSCOPE_IOC_MAGIC, 2, struct ramscope_pfn_query)
+#define RAMSCOPE_IOC_GET_RAM_INFO       _IOR(RAMSCOPE_IOC_MAGIC, 1, struct ramscope_ram_info)
+#define RAMSCOPE_IOC_QUERY_PFNS         _IOWR(RAMSCOPE_IOC_MAGIC, 2, struct ramscope_pfn_query)
+#define RAMSCOPE_IOC_RESERVE            _IOWR(RAMSCOPE_IOC_MAGIC, 3, struct ramscope_reservation_req)
+#define RAMSCOPE_IOC_RELEASE            _IOWR(RAMSCOPE_IOC_MAGIC, 4, struct ramscope_release_req)
+#define RAMSCOPE_IOC_LIST_RESERVATIONS  _IOR(RAMSCOPE_IOC_MAGIC, 5, struct ramscope_reservation_list)
 
 #endif /* _RAMSCOPE_H */

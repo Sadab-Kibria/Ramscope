@@ -22,7 +22,8 @@ const LIGHT_COLOR_MAP: Record<string, string> = {
   used: "#2563eb",       // Blue 600
   free: "#16a34a",       // Green 600
   kernel: "#d97706",     // Amber 600
-  reserved: "#94a3b8",   // Slate 400
+  reserved: "#64748b",   // Slate 500
+  allocated: "#10b981",  // Emerald 500 (Allocated / Project Reserved)
   unknown: "#94a3b8",    // Slate 400
   mixed: "#7c3aed",      // Purple 600
   highlight: "#e11d48",  // Rose 600
@@ -313,8 +314,12 @@ export const RamCanvas: React.FC<RamCanvasProps> = ({
           <span>Kernel / Cache</span>
         </div>
         <div className="flex items-center gap-1.5">
+          <span className="h-3 w-3 rounded-xs bg-emerald-500 inline-block ring-1 ring-emerald-600" />
+          <span className="font-semibold text-emerald-700">Allocated (Project)</span>
+        </div>
+        <div className="flex items-center gap-1.5">
           <span className="h-3 w-3 rounded-xs bg-slate-400 inline-block" />
-          <span>Unknown / Unavailable</span>
+          <span>Reserved / Unknown</span>
         </div>
         <div className="flex items-center gap-1.5">
           <span className="h-3 w-3 rounded-xs bg-rose-600 inline-block" />
@@ -357,7 +362,11 @@ export const RamCanvas: React.FC<RamCanvasProps> = ({
             <span className="font-bold text-slate-900 font-mono">
               PFN {hoveredBlock.startPFN ?? hoveredBlock.start_pfn} — {hoveredBlock.endPFN ?? hoveredBlock.end_pfn}
             </span>
-            <span className="text-[10px] uppercase font-bold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">
+            <span className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded ${
+              hoveredBlock.status === "allocated"
+                ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                : "bg-slate-100 text-slate-600"
+            }`}>
               {hoveredBlock.status}
             </span>
           </div>
@@ -371,6 +380,12 @@ export const RamCanvas: React.FC<RamCanvasProps> = ({
               <span className="text-slate-400">Span: </span>
               {formatNumber(hoveredBlock.pageCount ?? hoveredBlock.page_count ?? 1)} Pages ({formatBytes((hoveredBlock.pageCount ?? hoveredBlock.page_count ?? 1) * 4096)})
             </div>
+            {(hoveredBlock.allocatedCount ?? hoveredBlock.allocated_count ?? 0) > 0 && (
+              <div>
+                <span className="text-emerald-700 font-semibold">Allocated: </span>
+                <span className="text-emerald-800 font-bold">{formatNumber(hoveredBlock.allocatedCount ?? hoveredBlock.allocated_count ?? 0)} Pages</span>
+              </div>
+            )}
           </div>
 
           <div className="pt-0.5 text-[10px] text-blue-600 font-medium">

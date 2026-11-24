@@ -25,6 +25,7 @@ export const PageDetailModal: React.FC<PageDetailModalProps> = ({
   const address = pageDetail?.physicalAddressHex ?? pageDetail?.physical_address_hex ?? "0x0";
   const pageSize = pageDetail?.pageSize ?? pageDetail?.page_size ?? 4096;
   const mapCount = pageDetail?.mapCount ?? pageDetail?.map_count ?? 0;
+  const refCount = pageDetail?.refCount ?? pageDetail?.ref_count ?? 0;
   const rawFlags = pageDetail?.rawFlagsHex ?? pageDetail?.raw_flags_hex ?? "0x0";
   const flags = pageDetail?.flags ?? [];
   const mappedProcesses = pageDetail?.mappedProcesses ?? pageDetail?.mapped_processes ?? [];
@@ -46,7 +47,7 @@ export const PageDetailModal: React.FC<PageDetailModalProps> = ({
                 </h3>
                 <span className={`px-1.5 py-0.5 rounded text-xs font-mono font-bold uppercase border ${
                   status === "allocated"
-                    ? "bg-emerald-100 border-emerald-300 text-emerald-800"
+                    ? "bg-cyan-100 border-cyan-300 text-cyan-800"
                     : "bg-slate-100 border-slate-200 text-slate-700"
                 }`}>
                   {status}
@@ -74,15 +75,15 @@ export const PageDetailModal: React.FC<PageDetailModalProps> = ({
           <div className="space-y-3">
             {/* Allocation Banner if Allocated */}
             {(pageDetail?.isAllocated || pageDetail?.is_allocated || status === "allocated") && (
-              <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-between text-xs">
+              <div className="p-3 rounded-lg bg-cyan-50 border border-cyan-200 flex items-center justify-between text-xs">
                 <div className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                  <span className="font-semibold text-emerald-900">
-                    RAMScope Project Allocated Memory
+                  <span className="w-2.5 h-2.5 rounded-full bg-cyan-600 animate-pulse"></span>
+                  <span className="font-semibold text-cyan-950">
+                    RAMScope Kernel-Locked Memory
                   </span>
                 </div>
                 {(pageDetail?.allocatedBy || pageDetail?.allocated_by) && (
-                  <span className="px-2 py-0.5 rounded font-mono font-bold bg-white text-emerald-800 border border-emerald-200">
+                  <span className="px-2 py-0.5 rounded font-mono font-bold bg-white text-cyan-800 border border-cyan-200">
                     App: {pageDetail?.allocatedBy || pageDetail?.allocated_by}
                   </span>
                 )}
@@ -90,14 +91,18 @@ export const PageDetailModal: React.FC<PageDetailModalProps> = ({
             )}
 
             {/* Quick Metrics */}
-            <div className="grid grid-cols-3 gap-2 text-xs font-mono">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono">
+              <div className="p-2.5 rounded bg-slate-50 border border-slate-200">
+                <div className="font-sans text-slate-500 text-[11px]">Ref Count</div>
+                <div className="text-sm font-bold text-slate-900 mt-0.5">{refCount}</div>
+              </div>
               <div className="p-2.5 rounded bg-slate-50 border border-slate-200">
                 <div className="font-sans text-slate-500 text-[11px]">Map Count</div>
                 <div className="text-sm font-bold text-slate-900 mt-0.5">{mapCount}</div>
               </div>
               <div className="p-2.5 rounded bg-slate-50 border border-slate-200">
                 <div className="font-sans text-slate-500 text-[11px]">Raw Flags</div>
-                <div className="text-sm font-bold text-slate-900 mt-0.5">{rawFlags}</div>
+                <div className="text-sm font-bold text-slate-900 mt-0.5 truncate" title={rawFlags}>{rawFlags}</div>
               </div>
               <div className="p-2.5 rounded bg-slate-50 border border-slate-200">
                 <div className="font-sans text-slate-500 text-[11px]">Page Size</div>

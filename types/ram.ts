@@ -183,6 +183,15 @@ export interface ReserveRequest {
   size_mb?: number;
 }
 
+export interface PfnRangeSpan {
+  startPfn: number;
+  start_pfn?: number;
+  endPfn: number;
+  end_pfn?: number;
+  pageCount: number;
+  page_count?: number;
+}
+
 export interface ReserveResponse {
   success: boolean;
   regionId: number;
@@ -200,6 +209,7 @@ export interface ReserveResponse {
   size_mb?: number;
   physicalAddressHex: string;
   physical_address_hex?: string;
+  ranges?: PfnRangeSpan[];
   timestamp: string;
   message: string;
 }
@@ -234,6 +244,7 @@ export interface ReservationInfo {
   size_mb?: number;
   physicalAddressHex: string;
   physical_address_hex?: string;
+  ranges?: PfnRangeSpan[];
   createdAt: string;
   created_at?: string;
 }

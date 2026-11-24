@@ -40,7 +40,10 @@ export const Header: React.FC<HeaderProps> = ({
     };
   }, [lastUpdated]);
 
-  const isPrivileged = status?.is_root || status?.can_read_kpageflags || status?.privileged;
+  const isKmodLoaded = Boolean(status?.kernelModuleLoaded ?? status?.kernel_module_loaded);
+  const isRoot = Boolean(status?.isRoot ?? status?.is_root);
+  const canReadKpageflags = Boolean(status?.canReadKpageflags ?? status?.can_read_kpageflags);
+  const isPrivileged = Boolean(isRoot || canReadKpageflags || isKmodLoaded || status?.privileged);
 
   return (
     <header className="border-b border-slate-200 bg-white sticky top-0 z-40 px-4 lg:px-8 py-3 flex flex-wrap items-center justify-between gap-4">
@@ -67,13 +70,13 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Kernel module status */}
         <div
           className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium border ${
-            status?.kernel_module_loaded
+            isKmodLoaded
               ? "bg-emerald-50 text-emerald-700 border-emerald-200"
               : "bg-slate-50 text-slate-600 border-slate-200"
           }`}
         >
           <Cpu className="h-3.5 w-3.5" />
-          <span>{status?.kernel_module_loaded ? "/dev/ramscope Active" : "Procfs Interface"}</span>
+          <span>{isKmodLoaded ? "/dev/ramscope Active" : "Procfs Interface"}</span>
         </div>
 
         {/* Privileges Badge */}
@@ -89,7 +92,13 @@ export const Header: React.FC<HeaderProps> = ({
           ) : (
             <ShieldAlert className="h-3.5 w-3.5 text-amber-600" />
           )}
-          <span>{isPrivileged ? "Elevated Access (Root)" : "Standard User Access"}</span>
+          <span>
+            {isRoot
+              ? "Elevated Access (Root)"
+              : isPrivileged
+              ? "Kernel Driver Access"
+              : "Standard User Access"}
+          </span>
         </div>
 
         {/* Live indicator & Refresh */}

@@ -85,8 +85,8 @@ export const ProcessTable: React.FC<ProcessTableProps> = ({
             {processes.filter((p) => p.pid > 0).length} Active OS Processes
           </span>
           {processes.some((p) => p.pid < 0) && (
-            <span className="text-[11px] px-2 py-0.5 rounded bg-emerald-100 border border-emerald-300 text-emerald-800 font-mono font-bold flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 inline-block animate-pulse"></span>
+            <span className="text-[11px] px-2 py-0.5 rounded bg-cyan-100 border border-cyan-300 text-cyan-800 font-mono font-bold flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-cyan-600 inline-block animate-pulse"></span>
               {processes.filter((p) => p.pid < 0).length} Allocated
             </span>
           )}
@@ -180,7 +180,7 @@ export const ProcessTable: React.FC<ProcessTableProps> = ({
                   key={p.pid}
                   onClick={() => onSelectProcess(p)}
                   className={`group cursor-pointer transition hover:bg-slate-50 ${
-                    isSelected ? "bg-blue-50/70 font-medium" : isAllocated ? "bg-emerald-50/30" : ""
+                    isSelected ? "bg-blue-50/70 font-medium" : isAllocated ? "bg-cyan-50/40" : ""
                   }`}
                 >
                   <td className="py-2 px-3">
@@ -190,12 +190,12 @@ export const ProcessTable: React.FC<ProcessTableProps> = ({
                           isHighlighted
                             ? "bg-rose-500"
                             : isAllocated
-                            ? "bg-emerald-500 ring-2 ring-emerald-200"
+                            ? "bg-cyan-600 ring-2 ring-cyan-200"
                             : "bg-slate-300 group-hover:bg-blue-600"
                         }`}
                       />
                       <span className={`font-semibold ${
-                        isAllocated ? "text-emerald-950 font-bold" : "text-slate-900 group-hover:text-blue-600"
+                        isAllocated ? "text-cyan-950 font-bold" : "text-slate-900 group-hover:text-blue-600"
                       }`}>
                         {p.name}
                       </span>
@@ -203,7 +203,7 @@ export const ProcessTable: React.FC<ProcessTableProps> = ({
                   </td>
                   <td className="py-2 px-3 font-mono text-right">
                     {isAllocated ? (
-                      <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-cyan-100 text-cyan-800 border border-cyan-200">
                         Region #{Math.abs(p.pid)}
                       </span>
                     ) : (

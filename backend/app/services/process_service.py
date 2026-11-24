@@ -119,7 +119,16 @@ class ProcessService:
             match = next((r for r in reservations if r.region_id == region_id), None)
             if match:
                 from app.models.ram import ProcessPageEntry
-                pfns = list(range(match.start_pfn, min(match.end_pfn, match.start_pfn + max_pages)))
+                pfns: List[int] = []
+                spans = getattr(match, "ranges", None) or []
+                if spans:
+                    for rg in spans:
+                        rem = max_pages - len(pfns)
+                        if rem <= 0:
+                            break
+                        pfns.extend(range(rg.start_pfn, min(rg.end_pfn, rg.start_pfn + rem)))
+                else:
+                    pfns = list(range(match.start_pfn, min(match.end_pfn, match.start_pfn + max_pages)))
                 page_entries = []
                 for p in pfns[:min(len(pfns), 1000)]:
                     page_entries.append(ProcessPageEntry(

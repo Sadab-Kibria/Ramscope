@@ -25,6 +25,7 @@ interface ReservationPanelProps {
 }
 
 const PRESET_SIZES = [
+  { label: "4 MB", mb: 4 },
   { label: "16 MB", mb: 16 },
   { label: "32 MB", mb: 32 },
   { label: "64 MB", mb: 64 },
@@ -70,11 +71,11 @@ export const ReservationPanel: React.FC<ReservationPanelProps> = ({
       const res = await reserveMemory(req);
       setFeedback({
         type: "success",
-        message: `Successfully allocated Region #${res.regionId} (${res.sizeMb} MB) for '${res.application}' at PFN ${res.startPfn}!`,
+        message: res.message || `Allocated Region #${res.regionId} (${res.sizeMb} MB) for '${res.application}' at PFN ${res.startPfn}.`,
       });
       setAppName("");
       await onReservationChanged();
-      if (onLocateRange && res.startPfn) {
+      if (onLocateRange && res.startPfn !== undefined) {
         onLocateRange(res.startPfn, res.pageCount);
       }
     } catch (err: unknown) {
@@ -302,7 +303,6 @@ export const ReservationPanel: React.FC<ReservationPanelProps> = ({
                     const ePfn = r.endPfn ?? r.end_pfn ?? sPfn;
                     const pCount = r.pageCount ?? r.page_count ?? (ePfn - sPfn);
                     const sBytes = r.sizeBytes ?? r.size_bytes ?? (pCount * 4096);
-                    const sMb = r.sizeMb ?? r.size_mb ?? (sBytes / (1024 * 1024));
                     const isReleasing = releasingId === rId;
 
                     return (
@@ -325,7 +325,12 @@ export const ReservationPanel: React.FC<ReservationPanelProps> = ({
                           </span>
                         </td>
                         <td className="py-2 px-3 font-mono text-slate-700">
-                          {formatNumber(sPfn)} &rarr; {formatNumber(ePfn)}
+                          <div>{formatNumber(sPfn)} &rarr; {formatNumber(ePfn)}</div>
+                          {r.ranges && r.ranges.length > 1 && (
+                            <span className="text-[10px] text-cyan-700 font-sans font-semibold">
+                              {r.ranges.length} locked physical blocks
+                            </span>
+                          )}
                         </td>
                         <td className="py-2 px-3 font-mono text-[11px] text-slate-500">
                           {r.physicalAddressHex ?? r.physical_address_hex ?? `0x${(sPfn * 4096).toString(16)}`}

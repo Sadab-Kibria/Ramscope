@@ -130,6 +130,13 @@ class ReserveRequest(BaseModel):
     size_bytes: Optional[int] = Field(None, alias="sizeBytes", description="Size to reserve in bytes")
     size_mb: Optional[float] = Field(None, alias="sizeMb", description="Size to reserve in Megabytes")
 
+class PfnRangeSpan(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    start_pfn: int = Field(..., alias="startPfn")
+    end_pfn: int = Field(..., alias="endPfn")
+    page_count: int = Field(..., alias="pageCount")
+
 class ReserveResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
@@ -142,6 +149,7 @@ class ReserveResponse(BaseModel):
     size_bytes: int = Field(..., alias="sizeBytes")
     size_mb: float = Field(..., alias="sizeMb")
     physical_address_hex: str = Field(..., alias="physicalAddressHex")
+    ranges: List[PfnRangeSpan] = Field(default_factory=list)
     timestamp: str
     message: str
 
@@ -169,4 +177,5 @@ class ReservationItem(BaseModel):
     size_bytes: int = Field(..., alias="sizeBytes")
     size_mb: float = Field(..., alias="sizeMb")
     physical_address_hex: str = Field(..., alias="physicalAddressHex")
+    ranges: List[PfnRangeSpan] = Field(default_factory=list)
     created_at: str = Field(..., alias="createdAt")

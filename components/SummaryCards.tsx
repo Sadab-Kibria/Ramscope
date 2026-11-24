@@ -100,8 +100,8 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({ ram }) => {
                 Used ({formatBytes(Math.max(0, used - allocated))})
               </span>
               {allocated > 0 && (
-                <span className="flex items-center gap-1.5 font-semibold text-emerald-800">
-                  <span className="h-2.5 w-2.5 rounded-sm bg-emerald-500 inline-block ring-1 ring-emerald-600" />
+                <span className="flex items-center gap-1.5 font-semibold text-cyan-800">
+                  <span className="h-2.5 w-2.5 rounded-sm bg-cyan-600 inline-block ring-1 ring-cyan-700" />
                   Project Reserved ({formatBytes(allocated)})
                 </span>
               )}
@@ -133,7 +133,7 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({ ram }) => {
               {allocated > 0 && (
                 <div
                   style={{ width: `${(allocated / total) * 100}%` }}
-                  className="h-full bg-emerald-500 transition-all duration-300 ring-1 ring-emerald-600"
+                  className="h-full bg-cyan-600 transition-all duration-300 ring-1 ring-cyan-700"
                   title={`Project Reserved: ${formatBytes(allocated)}`}
                 />
               )}

@@ -7,7 +7,6 @@ import {
   ProcessPagesResponse,
   ReserveRequest,
   ReserveResponse,
-  ReleaseRequest,
   ReleaseResponse,
   ReservationInfo,
 } from "@/types/ram";

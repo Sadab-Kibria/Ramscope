@@ -11,7 +11,12 @@ interface PrivilegeBannerProps {
 export const PrivilegeBanner: React.FC<PrivilegeBannerProps> = ({ status }) => {
   if (!status) return null;
 
-  const isPrivileged = status.is_root || status.can_read_kpageflags || status.privileged;
+  const isPrivileged = Boolean(
+    (status.isRoot ?? status.is_root) ||
+    (status.canReadKpageflags ?? status.can_read_kpageflags) ||
+    (status.kernelModuleLoaded ?? status.kernel_module_loaded) ||
+    status.privileged
+  );
   if (isPrivileged) {
     return null;
   }

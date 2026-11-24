@@ -87,7 +87,7 @@ def reserve_memory(req: ReserveRequest):
 
     res = reservation_service.reserve(req)
     if not res.success:
-        raise HTTPException(status_code=500, detail=res.message)
+        raise HTTPException(status_code=400, detail=res.message)
     return res
 
 @router.post("/release", response_model=ReleaseResponse, summary="Deallocate a previously reserved memory region")

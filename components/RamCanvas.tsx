@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useRef, useEffect, useState } from "react";
-import { ZoomIn, ZoomOut, RotateCcw, Crosshair, Sparkles } from "lucide-react";
+import { ZoomIn, ZoomOut, RotateCcw, Crosshair, Sparkles, ChevronLeft, ChevronRight } from "lucide-react";
 import { PageBlockSummary, PagesMapResponse } from "@/types/ram";
 import { formatBytes, formatNumber } from "@/lib/api";
 
@@ -23,7 +23,7 @@ const LIGHT_COLOR_MAP: Record<string, string> = {
   free: "#16a34a",       // Green 600
   kernel: "#d97706",     // Amber 600
   reserved: "#64748b",   // Slate 500
-  allocated: "#10b981",  // Emerald 500 (Allocated / Project Reserved)
+  allocated: "#0891b2",  // Cyan 600 (Distinct from Green Free & Blue Used)
   unknown: "#94a3b8",    // Slate 400
   mixed: "#7c3aed",      // Purple 600
   highlight: "#e11d48",  // Rose 600
@@ -48,11 +48,13 @@ export const RamCanvas: React.FC<RamCanvasProps> = ({
   const [hoverPos, setHoverPos] = useState<{ x: number; y: number } | null>(null);
   const [selectedBlock, setSelectedBlock] = useState<PageBlockSummary | null>(null);
   const [zoomLevel, setZoomLevel] = useState<number>(1);
+  const [pfnInput, setPfnInput] = useState<string>("");
 
   const blocks = React.useMemo(() => mapData?.blocks ?? mapData?.pages ?? [], [mapData]);
   const totalPages = mapData?.totalPages ?? mapData?.total_pages ?? 1048576;
+  const maxPfnSpan = Math.max(totalPages, mapData?.maxPFN ?? mapData?.max_pfn ?? totalPages);
   const currentStart = mapData?.startPFN ?? mapData?.start_pfn ?? 0;
-  const currentEnd = mapData?.endPFN ?? mapData?.end_pfn ?? totalPages;
+  const currentEnd = mapData?.endPFN ?? mapData?.end_pfn ?? maxPfnSpan;
   const currentCount = currentEnd - currentStart;
 
   // Render 2D grid on Canvas
@@ -205,29 +207,72 @@ export const RamCanvas: React.FC<RamCanvasProps> = ({
     }
   };
 
+  const canPanLeft = currentStart > 0;
+  const canPanRight = currentEnd < maxPfnSpan;
+  const isZoomed = zoomLevel > 1 || currentCount < maxPfnSpan;
+
   const handleZoomIn = () => {
-    const nextZoom = Math.min(zoomLevel * 4, 1024);
+    const currentRatio = Math.max(1, Math.round(maxPfnSpan / Math.max(1, currentCount)));
+    const baseZoom = Math.max(zoomLevel, currentRatio);
+    const nextZoom = Math.min(baseZoom * 4, 1024);
     setZoomLevel(nextZoom);
-    const newCount = Math.max(64, Math.floor(totalPages / nextZoom));
+    const newCount = Math.max(64, Math.floor(maxPfnSpan / nextZoom));
     const centerPfn = selectedBlock
       ? Math.floor(((selectedBlock.startPFN ?? selectedBlock.start_pfn ?? 0) + (selectedBlock.endPFN ?? selectedBlock.end_pfn ?? 0)) / 2)
       : Math.floor((currentStart + currentEnd) / 2);
-    const newStart = Math.max(0, Math.min(totalPages - newCount, centerPfn - Math.floor(newCount / 2)));
+    const newStart = Math.max(0, Math.min(maxPfnSpan - newCount, centerPfn - Math.floor(newCount / 2)));
     onZoomChange(newStart, newCount);
   };
 
   const handleZoomOut = () => {
-    const nextZoom = Math.max(1, Math.floor(zoomLevel / 4));
+    const currentRatio = Math.max(1, Math.round(maxPfnSpan / Math.max(1, currentCount)));
+    const baseZoom = Math.max(zoomLevel, currentRatio);
+    const nextZoom = Math.max(1, Math.floor(baseZoom / 4));
     setZoomLevel(nextZoom);
-    const newCount = Math.min(totalPages, Math.floor(totalPages / nextZoom));
+    const newCount = Math.min(maxPfnSpan, Math.floor(maxPfnSpan / nextZoom));
     const centerPfn = Math.floor((currentStart + currentEnd) / 2);
-    const newStart = Math.max(0, Math.min(totalPages - newCount, centerPfn - Math.floor(newCount / 2)));
+    const newStart = Math.max(0, Math.min(maxPfnSpan - newCount, centerPfn - Math.floor(newCount / 2)));
     onZoomChange(newStart, newCount);
   };
 
   const handleResetZoom = () => {
     setZoomLevel(1);
-    onZoomChange(0, totalPages);
+    onZoomChange(0, maxPfnSpan);
+  };
+
+  const handlePanLeft = () => {
+    if (!canPanLeft) return;
+    const step = Math.max(1, Math.floor(currentCount / 2));
+    const newStart = Math.max(0, currentStart - step);
+    onZoomChange(newStart, currentCount);
+  };
+
+  const handlePanRight = () => {
+    if (!canPanRight) return;
+    const step = Math.max(1, Math.floor(currentCount / 2));
+    const newStart = Math.max(0, Math.min(maxPfnSpan - currentCount, currentStart + step));
+    onZoomChange(newStart, currentCount);
+  };
+
+  const handleGoToPfn = (e: React.FormEvent) => {
+    e.preventDefault();
+    const raw = pfnInput.trim().replace(/,/g, "");
+    if (!raw) return;
+
+    const parsed = raw.toLowerCase().startsWith("0x")
+      ? parseInt(raw, 16)
+      : parseInt(raw, 10);
+    if (Number.isNaN(parsed) || parsed < 0) return;
+
+    const targetPfn = Math.min(Math.max(0, maxPfnSpan - 1), parsed);
+    // If at 1x full view, zoom into a focused window around targetPfn; if already zoomed in, keep current window width
+    const defaultWindow = Math.min(maxPfnSpan, Math.max(64, selectedResolution * 4));
+    const span = currentCount < maxPfnSpan ? currentCount : defaultWindow;
+    const newStart = Math.max(0, Math.min(maxPfnSpan - span, targetPfn - Math.floor(span / 2)));
+    const nextZoom = Math.min(1024, Math.max(1, Math.round(maxPfnSpan / span)));
+
+    setZoomLevel(nextZoom);
+    onZoomChange(newStart, span);
   };
 
   return (
@@ -252,6 +297,26 @@ export const RamCanvas: React.FC<RamCanvasProps> = ({
             </div>
           )}
 
+          {/* Go to PFN Jump Input */}
+          <form onSubmit={handleGoToPfn} className="flex items-center gap-1">
+            <input
+              type="text"
+              value={pfnInput}
+              onChange={(e) => setPfnInput(e.target.value)}
+              placeholder="Go to PFN (e.g. 250000)"
+              className="w-36 px-2 py-1 rounded text-xs font-mono border border-slate-200 bg-white text-slate-800 placeholder-slate-400 focus:outline-none focus:border-slate-400"
+              title="Enter a decimal or 0x hex PFN and press Enter to jump & zoom there"
+            />
+            <button
+              type="submit"
+              disabled={!pfnInput.trim()}
+              className="px-2 py-1 rounded text-xs font-semibold bg-slate-900 hover:bg-slate-800 disabled:bg-slate-200 disabled:text-slate-400 text-white transition"
+              title="Jump to PFN"
+            >
+              Go
+            </button>
+          </form>
+
           {/* Resolution Selector */}
           {onResolutionChange && (
             <select
@@ -267,9 +332,31 @@ export const RamCanvas: React.FC<RamCanvasProps> = ({
             </select>
           )}
 
-          {/* Zoom controls */}
-          <div className="flex items-center gap-1 bg-slate-50 rounded border border-slate-200 p-0.5">
+          {/* Pan & Zoom controls */}
+          <div className="flex items-center gap-0.5 bg-slate-50 rounded border border-slate-200 p-0.5">
             <button
+              type="button"
+              onClick={handlePanLeft}
+              disabled={!canPanLeft}
+              className="p-1 rounded hover:bg-white text-slate-600 hover:text-slate-900 transition disabled:opacity-35"
+              title="Pan Left (Earlier PFNs)"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={handlePanRight}
+              disabled={!canPanRight}
+              className="p-1 rounded hover:bg-white text-slate-600 hover:text-slate-900 transition disabled:opacity-35"
+              title="Pan Right (Later PFNs)"
+            >
+              <ChevronRight className="h-3.5 w-3.5" />
+            </button>
+
+            <span className="h-3.5 w-px bg-slate-200 mx-0.5" />
+
+            <button
+              type="button"
               onClick={handleZoomIn}
               disabled={zoomLevel >= 1024}
               className="p-1 rounded hover:bg-white text-slate-600 hover:text-slate-900 transition disabled:opacity-40"
@@ -278,20 +365,23 @@ export const RamCanvas: React.FC<RamCanvasProps> = ({
               <ZoomIn className="h-3.5 w-3.5" />
             </button>
             <span className="text-xs font-mono font-semibold text-slate-800 px-1">
-              {zoomLevel}x
+              {Math.max(zoomLevel, Math.round(maxPfnSpan / Math.max(1, currentCount)))}x
             </span>
             <button
+              type="button"
               onClick={handleZoomOut}
-              disabled={zoomLevel <= 1}
+              disabled={!isZoomed}
               className="p-1 rounded hover:bg-white text-slate-600 hover:text-slate-900 transition disabled:opacity-40"
               title="Zoom Out"
             >
               <ZoomOut className="h-3.5 w-3.5" />
             </button>
             <button
+              type="button"
               onClick={handleResetZoom}
-              className="p-1 rounded hover:bg-white text-slate-500 hover:text-slate-900 transition"
-              title="Reset View"
+              disabled={!isZoomed}
+              className="p-1 rounded hover:bg-white text-slate-500 hover:text-slate-900 transition disabled:opacity-40"
+              title="Reset View (Full RAM)"
             >
               <RotateCcw className="h-3.5 w-3.5" />
             </button>
@@ -306,7 +396,7 @@ export const RamCanvas: React.FC<RamCanvasProps> = ({
           <span>Used</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="h-3 w-3 rounded-xs bg-emerald-600 inline-block" />
+          <span className="h-3 w-3 rounded-xs bg-green-600 inline-block" />
           <span>Free</span>
         </div>
         <div className="flex items-center gap-1.5">
@@ -314,12 +404,16 @@ export const RamCanvas: React.FC<RamCanvasProps> = ({
           <span>Kernel / Cache</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="h-3 w-3 rounded-xs bg-emerald-500 inline-block ring-1 ring-emerald-600" />
-          <span className="font-semibold text-emerald-700">Allocated (Project)</span>
+          <span className="h-3 w-3 rounded-xs bg-cyan-600 inline-block ring-1 ring-cyan-700" />
+          <span className="font-semibold text-cyan-800">Allocated (Project)</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="h-3 w-3 rounded-xs bg-slate-400 inline-block" />
-          <span>Reserved / Unknown</span>
+          <span className="h-3 w-3 rounded-xs bg-violet-600 inline-block" />
+          <span>Mixed</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="h-3 w-3 rounded-xs bg-slate-500 inline-block" />
+          <span>Reserved / Hole</span>
         </div>
         <div className="flex items-center gap-1.5">
           <span className="h-3 w-3 rounded-xs bg-rose-600 inline-block" />
@@ -364,7 +458,7 @@ export const RamCanvas: React.FC<RamCanvasProps> = ({
             </span>
             <span className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded ${
               hoveredBlock.status === "allocated"
-                ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                ? "bg-cyan-100 text-cyan-800 border border-cyan-300"
                 : "bg-slate-100 text-slate-600"
             }`}>
               {hoveredBlock.status}
@@ -382,8 +476,8 @@ export const RamCanvas: React.FC<RamCanvasProps> = ({
             </div>
             {(hoveredBlock.allocatedCount ?? hoveredBlock.allocated_count ?? 0) > 0 && (
               <div>
-                <span className="text-emerald-700 font-semibold">Allocated: </span>
-                <span className="text-emerald-800 font-bold">{formatNumber(hoveredBlock.allocatedCount ?? hoveredBlock.allocated_count ?? 0)} Pages</span>
+                <span className="text-cyan-700 font-semibold">Allocated: </span>
+                <span className="text-cyan-900 font-bold">{formatNumber(hoveredBlock.allocatedCount ?? hoveredBlock.allocated_count ?? 0)} Pages</span>
               </div>
             )}
           </div>
